@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Civica &mdash; Digital ID</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16233F;
+    --paper:#F3EFE3;
+    --paper-raised:#FBF9F2;
+    --seal:#9B2321;
+    --graphite:#2C2A26;
+    --graphite-soft:#5c584f;
+    --gold:#A98544;
+    --teal:#1F6F6B;
+    --line:#d8d0ba;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;min-height:100vh;
+    background:var(--paper);
+    font-family:'Inter',sans-serif;color:var(--graphite);
+    display:flex;align-items:center;justify-content:center;padding:32px 16px;
+  }
+  .wrap{width:100%;max-width:520px;}
+  .badge-row{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:18px;color:var(--teal);font-weight:600;font-size:13px;}
+
+  .id-card{
+    position:relative;width:100%;
+    background:linear-gradient(135deg, #FBF9F2 0%, #F3EEDF 100%);
+    border:1px solid var(--gold);border-radius:16px;
+    padding:22px 24px 0;overflow:hidden;
+  }
+  .id-card::before{
+    content:"";position:absolute;inset:0;
+    background-image:repeating-linear-gradient(45deg, rgba(169,133,68,0.05) 0 2px, transparent 2px 14px);
+    pointer-events:none;
+  }
+  .id-top{display:flex;justify-content:space-between;align-items:flex-start;position:relative;}
+  .id-issuer{font-family:'Spectral',serif;}
+  .id-issuer .name{font-weight:700;font-size:16px;color:var(--ink);}
+  .id-issuer .sub{font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--graphite-soft);}
+  .id-type{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--seal);border:1px solid var(--seal);padding:3px 8px;border-radius:4px;}
+
+  .id-body{display:flex;gap:20px;margin-top:18px;position:relative;}
+  .id-photo{
+    width:88px;height:104px;border-radius:6px;background:var(--ink);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Spectral',serif;font-size:30px;font-weight:600;color:var(--gold);
+    flex-shrink:0;border:1px solid var(--gold);overflow:hidden;
+  }
+  .id-photo img{width:100%;height:100%;object-fit:cover;display:block;}
+  .id-fields{flex:1;min-width:0;}
+  .id-fields .full-name{font-family:'Spectral',serif;font-weight:700;font-size:19px;color:var(--ink);margin:0 0 8px;}
+  .id-row{display:flex;gap:6px;font-size:12px;margin-bottom:4px;flex-wrap:wrap;}
+  .id-row .k{color:var(--graphite-soft);text-transform:uppercase;letter-spacing:0.4px;min-width:78px;font-weight:600;}
+  .id-row .v{font-family:'IBM Plex Mono',monospace;color:var(--graphite);}
+
+  .id-idnum{
+    margin-top:16px;padding:10px 0;border-top:1px dashed var(--gold);
+    font-family:'IBM Plex Mono',monospace;font-size:15px;letter-spacing:2px;color:var(--ink);
+    display:flex;justify-content:space-between;align-items:center;position:relative;
+  }
+  .id-idnum .status{font-family:'Inter',sans-serif;letter-spacing:0.4px;font-size:10.5px;text-transform:uppercase;color:var(--teal);font-weight:700;}
+
+  .disclaimer{margin-top:0;padding:14px 16px;background:var(--paper-raised);border:1px solid var(--line);border-top:none;border-radius:0 0 12px 12px;font-size:11.5px;color:var(--graphite-soft);line-height:1.5;}
+
+  .error-box{
+    background:var(--paper-raised);border:1px solid var(--seal);border-radius:12px;
+    padding:28px;text-align:center;color:var(--seal);font-size:14.5px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="badge-row" id="badge-row" style="display:none;">
+    <span>&#10003;</span><span>Scanned record &mdash; rendered from this ID's QR code</span>
+  </div>
+  <div id="content"></div>
+</div>
+
+<script>
+(function(){
+  function escapeHtml(s){
+    return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function initials(name){
+    return (name||'').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase() || '?';
+  }
+  function decodeProfileFromUrl(encoded){
+    let b64 = encoded.replace(/-/g,'+').replace(/_/g,'/');
+    while(b64.length % 4) b64 += '=';
+    const json = decodeURIComponent(escape(atob(b64)));
+    return JSON.parse(json);
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const d = params.get('d');
+  const content = document.getElementById('content');
+
+  if(!d){
+    content.innerHTML = `<div class="error-box">No ID data found in this link. Scan a Civica QR code to view a record here.</div>`;
+    return;
+  }
+
+  let profile;
+  try{ profile = decodeProfileFromUrl(d); }catch(e){ profile = null; }
+
+  if(!profile || !profile.name){
+    content.innerHTML = `<div class="error-box">This link couldn't be read as a valid Civica ID record.</div>`;
+    return;
+  }
+
+  document.getElementById('badge-row').style.display = 'flex';
+
+  const noteBits = [
+    profile.bank ? `Institution: ${profile.bank}` : '',
+    profile.acct ? `Acct (last 4): ${profile.acct}` : '',
+    profile.income ? `Income bracket: ${profile.income}` : ''
+  ].filter(Boolean);
+
+  content.innerHTML = `
+    <div class="id-card">
+      <div class="id-top">
+        <div class="id-issuer">
+          <div class="name">Civica Registry</div>
+          <div class="sub">Digital identity card</div>
+        </div>
+        <div class="id-type">DEMO / NON-OFFICIAL</div>
+      </div>
+      <div class="id-body">
+        <div class="id-photo">${profile.photo ? `<img src="${profile.photo}" alt="">` : initials(profile.name)}</div>
+        <div class="id-fields">
+          <p class="full-name">${escapeHtml(profile.name)}</p>
+          <div class="id-row"><span class="k">DOB</span><span class="v">${escapeHtml(profile.dob||'')}</span></div>
+          <div class="id-row"><span class="k">Nationality</span><span class="v">${escapeHtml(profile.nationality||'')}</span></div>
+          ${profile.race ? `<div class="id-row"><span class="k">Race/Eth.</span><span class="v">${escapeHtml(profile.race)}</span></div>` : ''}
+          <div class="id-row"><span class="k">Address</span><span class="v">${escapeHtml(profile.address||'')}</span></div>
+          ${profile.govref ? `<div class="id-row"><span class="k">Gov. ref.</span><span class="v">${escapeHtml(profile.govref)}</span></div>` : ''}
+          ${noteBits.length ? `<div class="id-row"><span class="k">Financial</span><span class="v">${escapeHtml(noteBits.join(' \u00b7 '))}</span></div>` : ''}
+        </div>
+      </div>
+      <div class="id-idnum">
+        <span>${escapeHtml(profile.id||'')}</span>
+        <span class="status">&#9679; active</span>
+      </div>
+    </div>
+    <div class="disclaimer">This is a self-issued demo credential from a personal project, not an official government record. All the data shown was encoded directly in the link that was scanned &mdash; nothing was looked up from a server.</div>
+  `;
+})();
+</script>
+</body>
+</html>
